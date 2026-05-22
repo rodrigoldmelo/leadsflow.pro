@@ -14,6 +14,8 @@ export interface Lead {
   data_submissao: string;
   created_at: string;
   updated_at: string;
+  observacao?: string | null;
+  atualizado_por_user_id?: string | null;
 }
 
 export interface DashboardStats {
