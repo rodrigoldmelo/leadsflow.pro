@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner';
 
 import type { Lead, LeadStatus, User } from '@/lib/types';
+import { labelUnidade } from '@/lib/unidade-mapping';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -52,9 +53,14 @@ export default function LeadsPage() {
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
 
-  const fetchLeads = useCallback(async (faculdade: string) => {
+  const fetchLeads = useCallback(async (unidade: User['unidade']) => {
     try {
-      const response = await fetch(`/api/leads?faculdade=${faculdade}`);
+      if (!unidade) {
+        console.warn('[leads] Conta sem unidade — lista vazia.');
+        setLeads([]);
+        return;
+      }
+      const response = await fetch(`/api/leads?unidade=${encodeURIComponent(unidade)}`);
       const data = await response.json();
       setLeads(data.leads || []);
     } catch (error) {
@@ -74,7 +80,7 @@ export default function LeadsPage() {
 
     const parsedUser = JSON.parse(userData) as User;
     setUser(parsedUser);
-    fetchLeads(parsedUser.faculdade);
+    fetchLeads(parsedUser.unidade);
   }, [router, fetchLeads]);
 
   const pendingLabel = useMemo(() => {
@@ -120,7 +126,7 @@ export default function LeadsPage() {
       setDialogOpen(false);
       setPending(null);
       setObservacao('');
-      await fetchLeads(user.faculdade);
+      await fetchLeads(user.unidade);
     } catch (e) {
       console.error(e);
       toast.error('Erro ao conectar com o servidor.');
@@ -291,10 +297,12 @@ export default function LeadsPage() {
     <>
       <div className="min-h-screen bg-gray-50">
         <header className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <h1 className="text-2xl font-bold text-gray-900">📋 Gestão de Leads</h1>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600 capitalize">{user?.faculdade}</span>
+            <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-4 text-sm text-gray-600">
+              <span className="capitalize text-right">
+                {user?.faculdade} · {labelUnidade(user?.unidade ?? null)}
+              </span>
               <button
                 type="button"
                 onClick={() => router.push('/dashboard')}
@@ -306,6 +314,14 @@ export default function LeadsPage() {
           </div>
         </header>
 
+        {!user?.unidade ? (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Sua conta não tem <strong>unidade</strong> configurada — nenhum lead será listado até o
+              cadastro ser atualizado no Supabase.
+            </div>
+          </div>
+        ) : null}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {leads.length === 0 ? (
             <div className="bg-white rounded-lg shadow-md p-12 text-center">

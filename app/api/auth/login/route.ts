@@ -192,6 +192,11 @@ export async function POST(req: NextRequest) {
 
     if (loginRouteAuthSuccess(password, userForLogin) && userForLogin) {
       const { password_hash: _ph, ...userData } = userForLogin;
+      console.log('[login] Sucesso', {
+        email,
+        faculdade: userData.faculdade,
+        unidade: userData.unidade ?? null,
+      });
       return NextResponse.json({
         success: true,
         user: userData,
@@ -221,6 +226,11 @@ export async function POST(req: NextRequest) {
   if (loginRouteAuthSuccess(password, anonUser ?? undefined)) {
     const u = anonUser as Record<string, unknown>;
     const { password_hash: _ph, ...userData } = u;
+    console.log('[login] Sucesso (anon)', {
+      email,
+      faculdade: userData.faculdade,
+      unidade: userData.unidade ?? null,
+    });
     return NextResponse.json({
       success: true,
       user: userData,

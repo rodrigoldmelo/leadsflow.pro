@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { supabaseAdmin } from '@/lib/supabase';
 import type { LeadStatus } from '@/lib/types';
+import {
+  faculdadeFromUnidade,
+  getUnidadeFromAccount,
+  normalizeAdAccountId,
+} from '@/lib/unidade-mapping';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -15,6 +20,8 @@ type FieldDatum = { name?: string; values?: string[] };
 type LeadgenGraphResponse = {
   id?: string;
   created_time?: string;
+  /** ID da conta de anúncios ligada ao lead (normalmente apenas dígitos). */
+  account_id?: string;
   field_data?: FieldDatum[];
   ad_id?: string;
   ad_name?: string;
@@ -36,6 +43,7 @@ type WebhookChange = {
     adgroup_id?: string;
     ad_id?: string;
     created_time?: number;
+    ad_account_id?: string;
   };
 };
 
@@ -85,27 +93,6 @@ function pickField(fieldData: FieldDatum[] | undefined, keys: string[]): string 
   return undefined;
 }
 
-function detectFaculdade(...texts: (string | undefined | null)[]): 'unifael' | 'uninassau' {
-  const blob = texts.filter(Boolean).join(' ').toLowerCase();
-  const hasFael = /unifael|uni[\s_-]*fael/.test(blob);
-  const hasNassau = /uninassau|uni[\s_-]*nassau|\bnassau\b/.test(blob);
-
-  if (hasFael && !hasNassau) return 'unifael';
-  if (hasNassau && !hasFael) return 'uninassau';
-  if (hasFael && hasNassau) {
-    const iF = blob.indexOf('fael');
-    const iN = blob.indexOf('nassau');
-    return iF !== -1 && iN !== -1 && iF < iN ? 'unifael' : 'uninassau';
-  }
-
-  console.warn(
-    logPrefix(),
-    'Faculdade não detectada no texto da campanha/anúncio; usando default unifael.',
-    { preview: blob.slice(0, 120) }
-  );
-  return 'unifael';
-}
-
 async function fetchLeadFromGraph(leadgenId: string): Promise<LeadgenGraphResponse> {
   const token = process.env.META_ACCESS_TOKEN?.trim();
   if (!token) throw new Error('META_ACCESS_TOKEN não configurado');
@@ -113,6 +100,7 @@ async function fetchLeadFromGraph(leadgenId: string): Promise<LeadgenGraphRespon
   const fields = [
     'created_time',
     'id',
+    'account_id',
     'field_data',
     'ad_id',
     'ad_name',
@@ -128,7 +116,10 @@ async function fetchLeadFromGraph(leadgenId: string): Promise<LeadgenGraphRespon
   url.searchParams.set('fields', fields);
   url.searchParams.set('access_token', token);
 
-  console.log(logPrefix(), 'Graph API: buscando leadgen', { leadgenId });
+  console.log(logPrefix(), 'Graph API: buscando leadgen', {
+    leadgenId,
+    fieldsIncludeAccountId: fields.includes('account_id'),
+  });
 
   const res = await fetch(url.toString(), { method: 'GET' });
   const json = (await res.json()) as LeadgenGraphResponse;
@@ -143,7 +134,8 @@ async function fetchLeadFromGraph(leadgenId: string): Promise<LeadgenGraphRespon
 
 function mapLeadRow(
   leadgenId: string,
-  g: LeadgenGraphResponse
+  g: LeadgenGraphResponse,
+  webhookValue?: WebhookChange['value']
 ): Record<string, unknown> {
   const fd = g.field_data;
 
@@ -162,7 +154,33 @@ function mapLeadRow(
 
   const campaignName = g.campaign_name ?? undefined;
   const adName = g.ad_name ?? undefined;
-  const faculdade = detectFaculdade(campaignName, adName, g.form_name);
+
+  /** Prioriza account_id da Graph API; webhook raramente traz conta explícita. */
+  const rawAccountFromWebhook =
+    webhookValue?.ad_account_id ?? webhookValue?.adgroup_id ?? null;
+  const rawAccountPrimary = g.account_id ?? rawAccountFromWebhook;
+  const adAccountNormalized = normalizeAdAccountId(rawAccountPrimary ?? undefined);
+
+  console.log(logPrefix(), 'Ad Account / conta de anúncios', {
+    leadgenId,
+    graph_account_id_raw: g.account_id ?? null,
+    webhook_ad_id: webhookValue?.ad_id ?? null,
+    webhook_ad_account_hint: rawAccountFromWebhook ?? null,
+    normalized_ad_account_id: adAccountNormalized,
+  });
+
+  const unidade = getUnidadeFromAccount(adAccountNormalized, {
+    leadgenId,
+    campaign_name: campaignName,
+    ad_name: adName,
+  });
+
+  console.log(logPrefix(), 'Unidade aplicada ao lead:', {
+    unidade,
+    faculdadeDerivada: faculdadeFromUnidade(unidade),
+  });
+
+  const faculdade = faculdadeFromUnidade(unidade);
 
   const curso = pickField(fd, ['curso', 'course', 'program', 'which_program', 'area']);
 
@@ -181,10 +199,12 @@ function mapLeadRow(
     email: email ?? null,
     curso: curso ?? null,
     faculdade,
+    unidade,
     status,
     campanha_nome: campaignName ?? adName ?? null,
     meta_ad_id: g.ad_id != null ? String(g.ad_id) : null,
     meta_campaign_id: g.campaign_id != null ? String(g.campaign_id) : null,
+    ad_account_id: adAccountNormalized,
     data_submissao: dataSub,
     updated_at: now,
   };
@@ -255,6 +275,8 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
+        console.log(logPrefix(), 'Payload leadgen (value)', change.value ?? null);
+
         const leadgenId = change.value?.leadgen_id;
         if (!leadgenId) {
           console.warn(logPrefix(), 'leadgen_id ausente em change.value', change.value);
@@ -264,12 +286,14 @@ export async function POST(req: NextRequest) {
 
         try {
           const graphLead = await fetchLeadFromGraph(leadgenId);
-          const row = mapLeadRow(leadgenId, graphLead);
+          const row = mapLeadRow(leadgenId, graphLead, change.value);
 
           console.log(logPrefix(), 'Upsert leads_meta', {
             meta_lead_id: row.meta_lead_id,
             nome: row.nome,
             faculdade: row.faculdade,
+            unidade: row.unidade,
+            ad_account_id: row.ad_account_id,
           });
 
           const { error } = await supabaseAdmin.from('leads_meta').upsert(row, {
@@ -295,7 +319,6 @@ export async function POST(req: NextRequest) {
 
     console.log(logPrefix(), 'Processamento concluído', { results });
 
-    // Meta espera HTTP 200 para não re-disparar; erros internos ficam nos logs/results.
     return NextResponse.json(
       { ok: allOk || results.length === 0, processed: results },
       { status: 200 }

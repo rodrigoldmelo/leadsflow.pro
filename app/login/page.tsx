@@ -92,8 +92,13 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-gray-600">
-            <p>Teste: unifael@leads.com / senha123</p>
+          <div className="mt-6 text-center text-sm text-gray-600 space-y-1">
+            <p>
+              Exemplo: <strong>curitiba@unifael.com</strong> / senha123
+            </p>
+            <p className="text-xs text-gray-500">
+              Cada uma das 9 unidades tem login próprio (@unifael.com ou @uninassau.com).
+            </p>
           </div>
         </div>
       </div>

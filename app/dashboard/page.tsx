@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { DashboardStats, User } from '@/lib/types';
+import { labelUnidade } from '@/lib/unidade-mapping';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -17,30 +18,49 @@ export default function DashboardPage() {
       return;
     }
 
-    const parsedUser = JSON.parse(userData);
+    const parsedUser = JSON.parse(userData) as User;
     setUser(parsedUser);
-    fetchStats(parsedUser.faculdade);
+    fetchStats(parsedUser);
   }, [router]);
 
-  const fetchStats = async (faculdade: string) => {
+  const fetchStats = async (current: User) => {
     try {
-      const response = await fetch(`/api/leads?faculdade=${faculdade}`);
+      if (!current.unidade) {
+        console.warn('[dashboard] Usuário sem unidade — métricas zeradas.');
+        setStats({
+          total_leads: 0,
+          qualificados: 0,
+          convertidos: 0,
+          perdidos: 0,
+          taxa_qualificacao: 0,
+          taxa_conversao: 0,
+        });
+        return;
+      }
+
+      const response = await fetch(
+        `/api/leads?unidade=${encodeURIComponent(current.unidade)}`
+      );
       const data = await response.json();
 
       const leads = data.leads || [];
 
       const calculatedStats: DashboardStats = {
         total_leads: leads.length,
-        qualificados: leads.filter((l: any) => l.status === 'qualificado').length,
-        convertidos: leads.filter((l: any) => l.status === 'convertido').length,
-        perdidos: leads.filter((l: any) => l.status === 'perdido').length,
+        qualificados: leads.filter((l: { status: string }) => l.status === 'qualificado').length,
+        convertidos: leads.filter((l: { status: string }) => l.status === 'convertido').length,
+        perdidos: leads.filter((l: { status: string }) => l.status === 'perdido').length,
         taxa_qualificacao: 0,
-        taxa_conversao: 0
+        taxa_conversao: 0,
       };
 
       if (calculatedStats.total_leads > 0) {
-        calculatedStats.taxa_qualificacao = Math.round((calculatedStats.qualificados / calculatedStats.total_leads) * 100);
-        calculatedStats.taxa_conversao = Math.round((calculatedStats.convertidos / calculatedStats.total_leads) * 100);
+        calculatedStats.taxa_qualificacao = Math.round(
+          (calculatedStats.qualificados / calculatedStats.total_leads) * 100
+        );
+        calculatedStats.taxa_conversao = Math.round(
+          (calculatedStats.convertidos / calculatedStats.total_leads) * 100
+        );
       }
 
       setStats(calculatedStats);
@@ -67,8 +87,10 @@ export default function DashboardPage() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">📊 Meta Leads Manager</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600 capitalize">{user.faculdade}</span>
+          <div className="flex items-center gap-4 text-right">
+            <span className="text-sm text-gray-600 capitalize">
+              {user.faculdade} · {labelUnidade(user.unidade ?? null)}
+            </span>
             <button
               onClick={handleLogout}
               className="text-sm text-gray-600 hover:text-gray-900"
@@ -80,6 +102,14 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {user && !user.unidade ? (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Esta conta ainda não tem <strong>unidade</strong> cadastrada em{' '}
+            <code className="rounded bg-amber-100 px-1">users_faculdades</code>. Rode o SQL de migration
+            e atualize o usuário para ver leads e métricas.
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="text-sm text-gray-600 mb-2">📨 Total de Leads</div>
