@@ -11,6 +11,9 @@ export interface Lead {
   faculdade: 'unifael' | 'uninassau';
   status: LeadStatus;
   campanha_nome?: string;
+  /** IDs do anúncio/campanha no Meta (úteis para CAPI / atribuição). */
+  meta_ad_id?: string | null;
+  meta_campaign_id?: string | null;
   data_submissao: string;
   created_at: string;
   updated_at: string;
