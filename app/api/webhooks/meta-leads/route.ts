@@ -83,14 +83,44 @@ function verifyMetaSignature256(
 
 function pickField(fieldData: FieldDatum[] | undefined, keys: string[]): string | undefined {
   if (!fieldData?.length) return undefined;
-  const lowerKeys = keys.map((k) => k.toLowerCase());
+  const normalizedKeys = keys.map(normalizeFieldName);
   for (const row of fieldData) {
-    const n = (row.name ?? '').toLowerCase();
-    if (!lowerKeys.includes(n)) continue;
+    const n = normalizeFieldName(row.name);
+    if (!normalizedKeys.includes(n)) continue;
     const v = row.values?.[0];
     if (v && v.trim()) return v.trim();
   }
   return undefined;
+}
+
+function normalizeFieldName(value: string | undefined) {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function normalizeModalidade(value: string | undefined) {
+  if (!value) return null;
+
+  const normalized = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (normalized.includes('ead') || normalized.includes('digital') || normalized.includes('online')) {
+    return 'EAD';
+  }
+  if (normalized.includes('presencial')) {
+    return 'Presencial';
+  }
+  if (normalized.includes('hibrid')) {
+    return 'Híbrido';
+  }
+
+  return null;
 }
 
 async function fetchLeadFromGraph(leadgenId: string): Promise<LeadgenGraphResponse> {
@@ -140,7 +170,17 @@ function mapLeadRow(
   const fd = g.field_data;
 
   const nome =
-    pickField(fd, ['full_name', 'full name', 'nome', 'name', 'your_name']) ?? '—';
+    pickField(fd, [
+      'full_name',
+      'full name',
+      'first_name',
+      'first name',
+      'nome',
+      'nome_completo',
+      'name',
+      'your_name',
+    ]) ??
+    '—';
   const telefone =
     pickField(fd, [
       'phone_number',
@@ -182,7 +222,25 @@ function mapLeadRow(
 
   const faculdade = faculdadeFromUnidade(unidade);
 
-  const curso = pickField(fd, ['curso', 'course', 'program', 'which_program', 'area']);
+  const curso = pickField(fd, [
+    'curso',
+    'course',
+    'program',
+    'which_program',
+    'area',
+    'qual_o_seu_curso_de_interesse?',
+    'qual_seu_curso_de_interesse?',
+    'qual_seu_curso_de_interesse?_',
+  ]);
+  const modalidadeRaw = pickField(fd, [
+    'modalidade',
+    'formato',
+    'qual_o_melhor_formato_para_você?',
+    'qual_o_melhor_formato_para_voce?',
+    'qual_melhor_formato_para_voce?',
+    'qual_modalidade_você_prefere?',
+    'qual_modalidade_voce_prefere?',
+  ]);
 
   const dataSub =
     g.created_time && !Number.isNaN(Date.parse(g.created_time))
@@ -198,10 +256,12 @@ function mapLeadRow(
     telefone,
     email: email ?? null,
     curso: curso ?? null,
+    modalidade: normalizeModalidade(modalidadeRaw),
     faculdade,
     unidade,
     status,
     campanha_nome: campaignName ?? adName ?? null,
+    meta_form_id: g.form_id ?? webhookValue?.form_id ?? null,
     meta_ad_id: g.ad_id != null ? String(g.ad_id) : null,
     meta_campaign_id: g.campaign_id != null ? String(g.campaign_id) : null,
     ad_account_id: adAccountNormalized,

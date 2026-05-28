@@ -3,8 +3,18 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import {
+  CheckCircle2,
+  LayoutDashboard,
+  LogOut,
+  Target,
+  ThumbsDown,
+  Users,
+} from 'lucide-react';
+
 import { DashboardStats, User } from '@/lib/types';
 import { labelUnidade } from '@/lib/unidade-mapping';
+import { LeadNotifications } from '@/components/lead-notifications';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -38,32 +48,14 @@ export default function DashboardPage() {
         return;
       }
 
-      const response = await fetch(
-        `/api/leads?unidade=${encodeURIComponent(current.unidade)}`
-      );
+      const response = await fetch(`/api/leads/stats?unidade=${encodeURIComponent(current.unidade)}`);
       const data = await response.json();
 
-      const leads = data.leads || [];
-
-      const calculatedStats: DashboardStats = {
-        total_leads: leads.length,
-        qualificados: leads.filter((l: { status: string }) => l.status === 'qualificado').length,
-        convertidos: leads.filter((l: { status: string }) => l.status === 'convertido').length,
-        perdidos: leads.filter((l: { status: string }) => l.status === 'perdido').length,
-        taxa_qualificacao: 0,
-        taxa_conversao: 0,
-      };
-
-      if (calculatedStats.total_leads > 0) {
-        calculatedStats.taxa_qualificacao = Math.round(
-          (calculatedStats.qualificados / calculatedStats.total_leads) * 100
-        );
-        calculatedStats.taxa_conversao = Math.round(
-          (calculatedStats.convertidos / calculatedStats.total_leads) * 100
-        );
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao buscar estatísticas.');
       }
 
-      setStats(calculatedStats);
+      setStats(data.stats);
     } catch (error) {
       console.error('Erro ao buscar stats:', error);
     }
@@ -76,25 +68,65 @@ export default function DashboardPage() {
 
   if (!stats || !user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
         <div className="text-gray-600">Carregando...</div>
       </div>
     );
   }
 
+  const cards = [
+    {
+      label: 'Total de leads',
+      value: stats.total_leads,
+      detail: 'Disponíveis para contato',
+      icon: Users,
+      color: 'text-gray-900',
+    },
+    {
+      label: 'Qualificados',
+      value: stats.qualificados,
+      detail: `${stats.taxa_qualificacao}% do total`,
+      icon: CheckCircle2,
+      color: 'text-emerald-700',
+    },
+    {
+      label: 'Convertidos',
+      value: stats.convertidos,
+      detail: `${stats.taxa_conversao}% do total`,
+      icon: Target,
+      color: 'text-blue-700',
+    },
+    {
+      label: 'Perdidos',
+      value: stats.perdidos,
+      detail: 'Encerrados sem conversão',
+      icon: ThumbsDown,
+      color: 'text-red-700',
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">📊 Meta Leads Manager</h1>
-          <div className="flex items-center gap-4 text-right">
-            <span className="text-sm text-gray-600 capitalize">
-              {user.faculdade} · {labelUnidade(user.unidade ?? null)}
-            </span>
+    <div className="min-h-screen bg-slate-100">
+      <header className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white">
+              <LayoutDashboard className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold text-gray-950">LeadsFlow Pro</h1>
+              <p className="truncate text-sm text-gray-500 capitalize">
+                {user.faculdade} · {labelUnidade(user.unidade ?? null)}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <LeadNotifications user={user} />
             <button
               onClick={handleLogout}
-              className="text-sm text-gray-600 hover:text-gray-900"
+              className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
+              <LogOut className="size-4" />
               Sair
             </button>
           </div>
@@ -103,43 +135,41 @@ export default function DashboardPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {user && !user.unidade ? (
-          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Esta conta ainda não tem <strong>unidade</strong> cadastrada em{' '}
-            <code className="rounded bg-amber-100 px-1">users_faculdades</code>. Rode o SQL de migration
-            e atualize o usuário para ver leads e métricas.
+          <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Esta conta ainda não tem unidade cadastrada em users_faculdades.
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="text-sm text-gray-600 mb-2">📨 Total de Leads</div>
-            <div className="text-3xl font-bold text-gray-900">{stats.total_leads}</div>
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-950">Resumo da unidade</h2>
+            <p className="text-sm text-gray-500">
+              Leads ordenados por chegada mais recente e separados por login de unidade.
+            </p>
           </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="text-sm text-gray-600 mb-2">✅ Qualificados</div>
-            <div className="text-3xl font-bold text-green-600">{stats.qualificados}</div>
-            <div className="text-sm text-gray-500 mt-1">{stats.taxa_qualificacao}%</div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="text-sm text-gray-600 mb-2">🎯 Convertidos</div>
-            <div className="text-3xl font-bold text-blue-600">{stats.convertidos}</div>
-            <div className="text-sm text-gray-500 mt-1">{stats.taxa_conversao}%</div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="text-sm text-gray-600 mb-2">❌ Perdidos</div>
-            <div className="text-3xl font-bold text-red-600">{stats.perdidos}</div>
-          </div>
+          <Link
+            href="/leads"
+            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            Ver leads
+          </Link>
         </div>
 
-        <Link
-          href="/leads"
-          className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-        >
-          Ver Todos os Leads →
-        </Link>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {cards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <div key={card.label} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="text-sm font-medium text-gray-500">{card.label}</div>
+                  <Icon className={`size-5 ${card.color}`} />
+                </div>
+                <div className={`text-3xl font-bold ${card.color}`}>{card.value}</div>
+                <div className="mt-1 text-sm text-gray-500">{card.detail}</div>
+              </div>
+            );
+          })}
+        </div>
       </main>
     </div>
   );

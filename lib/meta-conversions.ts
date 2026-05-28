@@ -2,8 +2,8 @@ import crypto from 'crypto';
 
 import type { Lead } from '@/lib/types';
 
-/** Eventos padrão enviados neste projeto. */
-export type MetaCapiStandardEvent = 'Lead' | 'Purchase';
+/** Eventos enviados neste projeto: padrões Meta e customizados para feedback negativo. */
+export type MetaCapiEvent = 'Lead' | 'Purchase' | 'LeadDisqualified' | 'LeadLost';
 
 function requireEnv(name: string): string {
   const v = process.env[name]?.trim();
@@ -56,7 +56,7 @@ export type SendConversionResult =
  */
 export async function sendConversionEvent(
   lead: Lead,
-  eventName: MetaCapiStandardEvent
+  eventName: MetaCapiEvent
 ): Promise<SendConversionResult> {
   const pixelId = requireEnv('META_PIXEL_ID');
   const accessToken = requireEnv('META_ACCESS_TOKEN');
@@ -80,7 +80,9 @@ export async function sendConversionEvent(
     console.warn('[meta-capi] Falha ao hashear PII (evento seguirá só com external_id):', msg);
   }
 
-  const custom_data: Record<string, string> = {};
+  const custom_data: Record<string, string> = {
+    lead_status: String(lead.status),
+  };
   if (lead.meta_campaign_id) {
     custom_data.campaign_id = String(lead.meta_campaign_id);
   }

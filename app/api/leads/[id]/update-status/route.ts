@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { sendConversionEvent } from '@/lib/meta-conversions';
+import type { MetaCapiEvent } from '@/lib/meta-conversions';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { Lead, LeadStatus } from '@/lib/types';
 
@@ -17,9 +18,20 @@ function isLeadStatus(value: unknown): value is LeadStatus {
 }
 
 export type MetaConversionResponse =
-  | { sent: true; event: 'Lead' | 'Purchase'; detail: unknown }
-  | { sent: false; event: 'Lead' | 'Purchase'; error: string; detail?: unknown }
+  | { sent: true; event: MetaCapiEvent; detail: unknown }
+  | { sent: false; event: MetaCapiEvent; error: string; detail?: unknown }
   | { skipped: true; reason: string };
+
+function metaEventForStatus(status: LeadStatus): MetaCapiEvent | null {
+  const events: Partial<Record<LeadStatus, MetaCapiEvent>> = {
+    qualificado: 'Lead',
+    convertido: 'Purchase',
+    nao_qualificado: 'LeadDisqualified',
+    perdido: 'LeadLost',
+  };
+
+  return events[status] ?? null;
+}
 
 /**
  * Espera-colunas opcionais no Supabase (adicione se ainda não existirem):
@@ -105,54 +117,35 @@ export async function PUT(
       reason: 'Nenhum envio CAPI para este status.',
     };
 
+    const metaEvent = metaEventForStatus(nextStatus);
+
     try {
-      if (nextStatus === 'qualificado') {
-        console.log('[update-status] Disparando Meta CAPI → Lead', {
+      if (metaEvent) {
+        console.log('[update-status] Disparando Meta CAPI', {
+          event: metaEvent,
           id: leadRow.id,
           meta_lead_id: leadRow.meta_lead_id,
         });
-        const res = await sendConversionEvent(leadRow, 'Lead');
+        const res = await sendConversionEvent(leadRow, metaEvent);
         if (res.ok) {
-          metaConversion = { sent: true, event: 'Lead', detail: res.body };
-          console.log('[update-status] CAPI Lead OK', res.body);
+          metaConversion = { sent: true, event: metaEvent, detail: res.body };
+          console.log('[update-status] CAPI OK', res.body);
         } else {
           metaConversion = {
             sent: false,
-            event: 'Lead',
+            event: metaEvent,
             error: res.error,
             detail: res.body,
           };
-          console.error('[update-status] CAPI Lead falhou', res.error, res.body);
-        }
-      } else if (nextStatus === 'convertido') {
-        console.log('[update-status] Disparando Meta CAPI → Purchase', {
-          id: leadRow.id,
-          meta_lead_id: leadRow.meta_lead_id,
-        });
-        const res = await sendConversionEvent(leadRow, 'Purchase');
-        if (res.ok) {
-          metaConversion = { sent: true, event: 'Purchase', detail: res.body };
-          console.log('[update-status] CAPI Purchase OK', res.body);
-        } else {
-          metaConversion = {
-            sent: false,
-            event: 'Purchase',
-            error: res.error,
-            detail: res.body,
-          };
-          console.error('[update-status] CAPI Purchase falhou', res.error, res.body);
+          console.error('[update-status] CAPI falhou', res.error, res.body);
         }
       }
     } catch (capiErr) {
       const msg = capiErr instanceof Error ? capiErr.message : String(capiErr);
       console.error('[update-status] Exceção ao chamar CAPI:', capiErr);
-      if (nextStatus === 'qualificado') {
-        metaConversion = { sent: false, event: 'Lead', error: msg };
-      } else if (nextStatus === 'convertido') {
-        metaConversion = { sent: false, event: 'Purchase', error: msg };
-      } else {
-        metaConversion = { skipped: true, reason: msg };
-      }
+      metaConversion = metaEvent
+        ? { sent: false, event: metaEvent, error: msg }
+        : { skipped: true, reason: msg };
     }
 
     return NextResponse.json({

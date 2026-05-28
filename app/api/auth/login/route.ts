@@ -289,8 +289,10 @@ function loginRouteAuthSuccess(
 ): boolean {
   if (!userRow) return false;
   const hash = userRow.password_hash;
-  // Demo original: senha fixa OU hash igual texto (legado dos seus testes)
+  if (typeof hash === 'string' && hash.trim()) {
+    return hash === password;
+  }
+  // Fallback apenas para contas legadas ainda sem senha própria cadastrada.
   if (password === 'senha123') return true;
-  if (typeof hash === 'string' && hash === password) return true;
   return false;
 }
