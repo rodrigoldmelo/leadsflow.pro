@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/meta-leads/sync?lookbackMinutes=180",
-      "schedule": "*/5 * * * *"
-    }
-  ]
-}
