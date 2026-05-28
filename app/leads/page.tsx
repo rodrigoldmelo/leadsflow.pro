@@ -56,6 +56,7 @@ type Pagination = {
 };
 
 const PAGE_SIZE_OPTIONS = [50, 100];
+const MANUAL_SYNC_LOOKBACK_MINUTES = 180;
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString('pt-BR', {
@@ -69,19 +70,6 @@ function formatTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function startOfCurrentMonthSaoPauloIso() {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-  }).formatToParts(now);
-  const year = parts.find((part) => part.type === 'year')?.value ?? String(now.getFullYear());
-  const month = parts.find((part) => part.type === 'month')?.value ?? String(now.getMonth() + 1).padStart(2, '0');
-
-  return `${year}-${month}-01T00:00:00-03:00`;
 }
 
 export default function LeadsPage() {
@@ -160,7 +148,7 @@ export default function LeadsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           unidade: user.unidade,
-          since: startOfCurrentMonthSaoPauloIso(),
+          lookbackMinutes: MANUAL_SYNC_LOOKBACK_MINUTES,
           until: new Date().toISOString(),
         }),
       });
