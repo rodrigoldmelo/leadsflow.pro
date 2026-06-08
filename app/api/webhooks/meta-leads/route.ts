@@ -242,6 +242,9 @@ function mapLeadRow(
     'qual_modalidade_voce_prefere?',
   ]);
   const medico = pickField(fd, [
+    'voce_e_medico_a',
+    'você_é_medico(a)?',
+    'você_é_médico(a)?',
     'voce_e_medico?',
     'você_é_médico?',
     'você_é_medico?',
@@ -359,7 +362,7 @@ export async function POST(req: NextRequest) {
           const graphLead = await fetchLeadFromGraph(leadgenId);
           const row = mapLeadRow(leadgenId, graphLead, change.value);
 
-          console.log(logPrefix(), 'Upsert leads_meta', {
+          console.log(logPrefix(), 'Salvar leads_meta', {
             meta_lead_id: row.meta_lead_id,
             nome: row.nome,
             faculdade: row.faculdade,
@@ -367,13 +370,39 @@ export async function POST(req: NextRequest) {
             ad_account_id: row.ad_account_id,
           });
 
-          const { error } = await supabaseAdmin.from('leads_meta').upsert(row, {
-            onConflict: 'meta_lead_id',
-            ignoreDuplicates: false,
-          });
+          const { data: existingLead, error: existingError } = await supabaseAdmin
+            .from('leads_meta')
+            .select('meta_lead_id')
+            .eq('meta_lead_id', String(row.meta_lead_id))
+            .maybeSingle();
+
+          if (existingError) {
+            throw existingError;
+          }
+
+          let error = null;
+
+          if (existingLead) {
+            const {
+              meta_lead_id: _metaLeadId,
+              status: _status,
+              updated_at: _updatedAt,
+              ...sourcePayload
+            } = row;
+
+            const updateResult = await supabaseAdmin
+              .from('leads_meta')
+              .update(sourcePayload)
+              .eq('meta_lead_id', String(row.meta_lead_id));
+
+            error = updateResult.error;
+          } else {
+            const insertResult = await supabaseAdmin.from('leads_meta').insert(row);
+            error = insertResult.error;
+          }
 
           if (error) {
-            console.error(logPrefix(), 'Supabase upsert erro', error);
+            console.error(logPrefix(), 'Supabase salvar lead erro', error);
             results.push({ leadgen_id: leadgenId, ok: false, detail: error.message });
           } else {
             results.push({ leadgen_id: leadgenId, ok: true });

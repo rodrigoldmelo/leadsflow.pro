@@ -8,6 +8,9 @@ export async function GET(req: NextRequest) {
     const unidade = searchParams.get('unidade');
     const faculdade = searchParams.get('faculdade');
     const status = searchParams.get('status');
+    const start = searchParams.get('start');
+    const end = searchParams.get('end');
+    const search = searchParams.get('search')?.trim();
     const shouldPaginate = searchParams.has('page') || searchParams.has('pageSize');
     const page = shouldPaginate ? Math.max(1, Number(searchParams.get('page') ?? '1') || 1) : 0;
     const pageSizeRaw = Number(searchParams.get('pageSize') ?? '0') || 0;
@@ -32,6 +35,24 @@ export async function GET(req: NextRequest) {
 
     if (status && status !== 'todos') {
       query = query.eq('status', status);
+    }
+
+    if (start) {
+      query = query.gte('data_submissao', start);
+    }
+
+    if (end) {
+      query = query.lt('data_submissao', end);
+    }
+
+    if (search) {
+      const safeSearch = search.replace(/[,%]/g, ' ').trim();
+      if (safeSearch) {
+        const pattern = `%${safeSearch}%`;
+        query = query.or(
+          `nome.ilike.${pattern},email.ilike.${pattern},telefone.ilike.${pattern}`
+        );
+      }
     }
 
     if (pageSize) {

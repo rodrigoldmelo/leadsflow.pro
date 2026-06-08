@@ -8,17 +8,34 @@ import {
   LayoutDashboard,
   LogOut,
   Target,
+  TrendingDown,
+  TrendingUp,
   ThumbsDown,
   Users,
 } from 'lucide-react';
 
 import { DashboardStats, User } from '@/lib/types';
 import { labelUnidade } from '@/lib/unidade-mapping';
+import { DateRangePicker, addDays, getDefaultPeriod } from '@/components/date-range-picker';
 import { LeadNotifications } from '@/components/lead-notifications';
+
+type PeriodState = {
+  startDate: string;
+  endDate: string;
+};
+
+function toPeriodStartIso(value: string) {
+  return `${value}T00:00:00-03:00`;
+}
+
+function toPeriodEndIso(value: string) {
+  return `${addDays(value, 1)}T00:00:00-03:00`;
+}
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [period, setPeriod] = useState(() => getDefaultPeriod());
   const router = useRouter();
 
   useEffect(() => {
@@ -30,10 +47,10 @@ export default function DashboardPage() {
 
     const parsedUser = JSON.parse(userData) as User;
     setUser(parsedUser);
-    fetchStats(parsedUser);
+    fetchStats(parsedUser, period);
   }, [router]);
 
-  const fetchStats = async (current: User) => {
+  const fetchStats = async (current: User, selectedPeriod = period) => {
     try {
       if (!current.unidade) {
         console.warn('[dashboard] Usuário sem unidade — métricas zeradas.');
@@ -48,7 +65,12 @@ export default function DashboardPage() {
         return;
       }
 
-      const response = await fetch(`/api/leads/stats?unidade=${encodeURIComponent(current.unidade)}`);
+      const params = new URLSearchParams({
+        unidade: current.unidade,
+        start: toPeriodStartIso(selectedPeriod.startDate),
+        end: toPeriodEndIso(selectedPeriod.endDate),
+      });
+      const response = await fetch(`/api/leads/stats?${params.toString()}`);
       const data = await response.json();
 
       if (!response.ok) {
@@ -66,6 +88,13 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
+  const changePeriod = (nextPeriod: PeriodState) => {
+    setPeriod(nextPeriod);
+    if (user) {
+      fetchStats(user, nextPeriod);
+    }
+  };
+
   if (!stats || !user) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
@@ -78,7 +107,7 @@ export default function DashboardPage() {
     {
       label: 'Total de leads',
       value: stats.total_leads,
-      detail: 'Disponíveis para contato',
+      detail: 'No período selecionado',
       icon: Users,
       color: 'text-gray-900',
     },
@@ -99,11 +128,14 @@ export default function DashboardPage() {
     {
       label: 'Perdidos',
       value: stats.perdidos,
-      detail: 'Encerrados sem conversão',
+      detail: `${stats.taxa_perdidos ?? 0}% do total`,
       icon: ThumbsDown,
       color: 'text-red-700',
     },
   ];
+  const delta = stats.delta_total_percent ?? 0;
+  const DeltaIcon = delta >= 0 ? TrendingUp : TrendingDown;
+  const previousTotal = stats.previous_total_leads ?? 0;
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -144,7 +176,7 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-2xl font-bold text-gray-950">Resumo da unidade</h2>
             <p className="text-sm text-gray-500">
-              Leads ordenados por chegada mais recente e separados por login de unidade.
+              Visão estratégica de leads por período e unidade.
             </p>
           </div>
           <Link
@@ -153,6 +185,26 @@ export default function DashboardPage() {
           >
             Ver leads
           </Link>
+        </div>
+
+        <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-3 lg:grid-cols-[minmax(18rem,24rem)_1fr] lg:items-center">
+            <DateRangePicker value={period} onChange={changePeriod} />
+            <div className="flex justify-start lg:justify-end">
+              <div
+                className={`inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-semibold ${
+                  delta >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                }`}
+              >
+                <DeltaIcon className="size-4" />
+                <span>
+                  {delta >= 0 ? '+' : ''}
+                  {delta}% vs. mesmo período do mês anterior
+                  <span className="ml-1 font-medium opacity-75">({previousTotal} leads)</span>
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

@@ -123,6 +123,11 @@ const PAGES_BY_UNIT: PageConfig[] = [
     pageName: 'Uninassau Campina Grande',
     unidade: 'uninassau_campina_grande',
   },
+  {
+    pageId: '323083024974374',
+    pageName: 'IR Consultoria',
+    unidade: 'ir_consultoria',
+  },
 ];
 
 function logPrefix() {
@@ -265,6 +270,9 @@ function mapLeadToRow(lead: LeadgenLead, page: PageConfig): Record<string, unkno
     'qual_modalidade_voce_prefere?',
   ]);
   const medico = pickField(fieldData, [
+    'voce_e_medico_a',
+    'você_é_medico(a)?',
+    'você_é_médico(a)?',
     'voce_e_medico?',
     'você_é_médico?',
     'você_é_medico?',

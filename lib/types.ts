@@ -37,6 +37,7 @@ export interface Lead {
   created_at: string;
   updated_at: string;
   observacao?: string | null;
+  responsavel_atendimento?: string | null;
   atualizado_por_user_id?: string | null;
 }
 
@@ -45,8 +46,19 @@ export interface DashboardStats {
   qualificados: number;
   convertidos: number;
   perdidos: number;
+  nao_qualificados?: number;
   taxa_qualificacao: number;
   taxa_conversao: number;
+  taxa_perdidos?: number;
+  taxa_nao_qualificados?: number;
+  previous_total_leads?: number;
+  delta_total_percent?: number;
+  period?: {
+    start: string;
+    end: string;
+    previousStart: string;
+    previousEnd: string;
+  };
 }
 
 export interface User {
