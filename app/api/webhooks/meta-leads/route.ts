@@ -241,6 +241,16 @@ function mapLeadRow(
     'qual_modalidade_você_prefere?',
     'qual_modalidade_voce_prefere?',
   ]);
+  const medico = pickField(fd, [
+    'voce_e_medico?',
+    'você_é_médico?',
+    'você_é_medico?',
+    'voce_e_médico?',
+    'e_medico?',
+    'é_médico?',
+    'medico',
+    'médico',
+  ]);
 
   const dataSub =
     g.created_time && !Number.isNaN(Date.parse(g.created_time))
@@ -257,6 +267,7 @@ function mapLeadRow(
     email: email ?? null,
     curso: curso ?? null,
     modalidade: normalizeModalidade(modalidadeRaw),
+    medico: medico ?? null,
     faculdade,
     unidade,
     status,

@@ -30,6 +30,9 @@ export const ACCOUNT_TO_UNIDADE: Record<string, Unidade> = {
   '207224937995313': 'uninassau_barreiras',
   '5434306676675337': 'uninassau_patos',
   '266116647806266': 'uninassau_campina_grande',
+
+  // IR CONSULTORIA
+  '231830236854101': 'ir_consultoria',
 };
 
 export function normalizeAdAccountId(
@@ -87,10 +90,12 @@ export function getUnidadeFromAccount(
 }
 
 export function faculdadeFromUnidade(unidade: Unidade): Faculdade {
+  if (unidade === 'ir_consultoria') return 'ir_consultoria';
   return unidade.startsWith('unifael') ? 'unifael' : 'uninassau';
 }
 
 export function labelUnidade(u: string | undefined | null): string {
   if (!u) return '—';
+  if (u === 'ir_consultoria') return 'IR Consultoria';
   return u.replace(/_/g, ' ');
 }

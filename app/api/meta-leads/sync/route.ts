@@ -143,6 +143,7 @@ function formatError(error: unknown) {
 }
 
 function faculdadeFromUnidade(unidade: Unidade): Faculdade {
+  if (unidade === 'ir_consultoria') return 'ir_consultoria';
   return unidade.startsWith('unifael') ? 'unifael' : 'uninassau';
 }
 
@@ -263,6 +264,16 @@ function mapLeadToRow(lead: LeadgenLead, page: PageConfig): Record<string, unkno
     'qual_modalidade_você_prefere?',
     'qual_modalidade_voce_prefere?',
   ]);
+  const medico = pickField(fieldData, [
+    'voce_e_medico?',
+    'você_é_médico?',
+    'você_é_medico?',
+    'voce_e_médico?',
+    'e_medico?',
+    'é_médico?',
+    'medico',
+    'médico',
+  ]);
 
   const dataSub =
     lead.created_time && !Number.isNaN(Date.parse(lead.created_time))
@@ -279,6 +290,7 @@ function mapLeadToRow(lead: LeadgenLead, page: PageConfig): Record<string, unkno
     email: email ?? null,
     curso: curso ?? null,
     modalidade: normalizeModalidade(modalidadeRaw),
+    medico: medico ?? null,
     faculdade: faculdadeFromUnidade(page.unidade),
     unidade: page.unidade,
     status,

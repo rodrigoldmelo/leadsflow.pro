@@ -1,6 +1,6 @@
 export type LeadStatus = 'novo' | 'qualificado' | 'nao_qualificado' | 'convertido' | 'perdido';
 
-export type Faculdade = 'unifael' | 'uninassau';
+export type Faculdade = 'unifael' | 'uninassau' | 'ir_consultoria';
 
 /** Nove unidades físicas (mapeamento por Ad Account do Meta). */
 export type Unidade =
@@ -12,7 +12,8 @@ export type Unidade =
   | 'uninassau_cacoal'
   | 'uninassau_barreiras'
   | 'uninassau_patos'
-  | 'uninassau_campina_grande';
+  | 'uninassau_campina_grande'
+  | 'ir_consultoria';
 
 export interface Lead {
   id: string;
@@ -22,6 +23,7 @@ export interface Lead {
   telefone: string;
   curso?: string;
   modalidade?: 'EAD' | 'Presencial' | 'Híbrido';
+  medico?: string | null;
   faculdade: Faculdade;
   /** Pode ser null em leads antigos (pré-unidade). */
   unidade: Unidade | null;

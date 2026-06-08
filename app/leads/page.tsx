@@ -33,7 +33,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
@@ -86,6 +85,7 @@ export default function LeadsPage() {
   const [syncing, setSyncing] = useState(false);
   const [highlightLeadId, setHighlightLeadId] = useState<string | null>(null);
   const router = useRouter();
+  const isIrConsultoria = user?.unidade === 'ir_consultoria';
 
   const fetchLeads = useCallback(
     async (
@@ -273,45 +273,39 @@ export default function LeadsPage() {
 
   function ActionsForLead({ lead }: { lead: Lead }) {
     const s = lead.status;
-    const showActions = s === 'novo' || s === 'qualificado';
+    const actions: Array<{ status: LeadStatus; label: string; icon: typeof Clock; color: string }> = [
+      { status: 'novo', label: 'Marcar como novo', icon: Clock, color: 'text-amber-600' },
+      { status: 'qualificado', label: 'Qualificar', icon: CheckCircle2, color: 'text-emerald-600' },
+      { status: 'nao_qualificado', label: 'Não qualificar', icon: ThumbsDown, color: 'text-red-600' },
+      { status: 'convertido', label: 'Converter', icon: Target, color: 'text-blue-600' },
+      { status: 'perdido', label: 'Perder', icon: Trash2, color: 'text-gray-600' },
+    ];
+    const availableActions = actions.filter((action) => action.status !== s);
 
     return (
       <div className="flex items-center justify-end">
-        {showActions ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" size="sm" aria-label="Atualizar status do lead">
-                Atualizar
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[12rem]">
-              {s === 'novo' && (
-                <>
-                  <DropdownMenuItem onSelect={() => openConfirm(lead, 'qualificado')}>
-                    <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
-                    Qualificar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => openConfirm(lead, 'nao_qualificado')}>
-                    <ThumbsDown className="size-4 shrink-0 text-red-600" />
-                    Não qualificar
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-              <DropdownMenuItem onSelect={() => openConfirm(lead, 'convertido')}>
-                <Target className="size-4 shrink-0 text-blue-600" />
-                Converter
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => openConfirm(lead, 'perdido')}>
-                <Trash2 className="size-4 shrink-0 text-gray-600" />
-                Perder
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <span className="text-xs text-gray-400">-</span>
-        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" size="sm" aria-label="Atualizar status do lead">
+              Atualizar
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[12rem]">
+            {availableActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <DropdownMenuItem
+                  key={action.status}
+                  onSelect={() => openConfirm(lead, action.status)}
+                >
+                  <Icon className={`size-4 shrink-0 ${action.color}`} />
+                  {action.label}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     );
   }
@@ -439,24 +433,35 @@ export default function LeadsPage() {
                         <Phone className="size-4 shrink-0 text-gray-400" />
                         <span className="min-w-0 truncate">{lead.telefone || '-'}</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3 pt-1">
-                        <div>
+                      {isIrConsultoria ? (
+                        <div className="pt-1">
                           <div className="text-xs font-medium uppercase text-gray-400">
-                            Modalidade
+                            Você é Médico?
                           </div>
                           <div className="mt-0.5 truncate text-gray-700">
-                            {lead.modalidade || '-'}
+                            {lead.medico || '-'}
                           </div>
                         </div>
-                        <div>
-                          <div className="text-xs font-medium uppercase text-gray-400">
-                            Curso
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <div className="text-xs font-medium uppercase text-gray-400">
+                              Modalidade
+                            </div>
+                            <div className="mt-0.5 truncate text-gray-700">
+                              {lead.modalidade || '-'}
+                            </div>
                           </div>
-                          <div className="mt-0.5 truncate text-gray-700">
-                            {lead.curso || '-'}
+                          <div>
+                            <div className="text-xs font-medium uppercase text-gray-400">
+                              Curso
+                            </div>
+                            <div className="mt-0.5 truncate text-gray-700">
+                              {lead.curso || '-'}
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
 
                     <div className="mt-4 flex justify-end border-t border-gray-100 pt-3">
@@ -467,7 +472,11 @@ export default function LeadsPage() {
               </div>
 
               <div className="hidden overflow-x-auto md:block">
-                <table className="min-w-[1160px] w-full divide-y divide-gray-200">
+                <table
+                  className={`w-full divide-y divide-gray-200 ${
+                    isIrConsultoria ? 'min-w-[1040px]' : 'min-w-[1160px]'
+                  }`}
+                >
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
@@ -485,12 +494,20 @@ export default function LeadsPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
                         Contato
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                        Modalidade
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                        Curso
-                      </th>
+                      {isIrConsultoria ? (
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                          Você é Médico?
+                        </th>
+                      ) : (
+                        <>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                            Modalidade
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                            Curso
+                          </th>
+                        </>
+                      )}
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
                         Status
                       </th>
@@ -531,12 +548,20 @@ export default function LeadsPage() {
                             {lead.telefone || '-'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                          {lead.modalidade || '-'}
-                        </td>
-                        <td className="px-4 py-3 min-w-[12rem] text-sm text-gray-600">
-                          {lead.curso || '-'}
-                        </td>
+                        {isIrConsultoria ? (
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                            {lead.medico || '-'}
+                          </td>
+                        ) : (
+                          <>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                              {lead.modalidade || '-'}
+                            </td>
+                            <td className="px-4 py-3 min-w-[12rem] text-sm text-gray-600">
+                              {lead.curso || '-'}
+                            </td>
+                          </>
+                        )}
                         <td className="px-4 py-3 whitespace-nowrap align-middle">
                           <span
                             className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${getStatusColor(
