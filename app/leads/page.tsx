@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Clock,
   Columns3,
+  Download,
   Mail,
   MessageCircle,
   MoreHorizontal,
@@ -122,6 +123,7 @@ export default function LeadsPage() {
   const [crmObservacao, setCrmObservacao] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [dropStatus, setDropStatus] = useState<LeadStatus | null>(null);
@@ -132,10 +134,10 @@ export default function LeadsPage() {
   const fetchLeads = useCallback(
     async (
       unidade: User['unidade'],
-      nextPage = page,
-      nextPageSize = pageSize,
-      nextPeriod = period,
-      nextSearch = searchQuery
+      nextPage: number,
+      nextPageSize: number,
+      nextPeriod: { startDate: string; endDate: string },
+      nextSearch: string
     ) => {
       try {
         if (!unidade) {
@@ -167,7 +169,7 @@ export default function LeadsPage() {
         setLoading(false);
       }
     },
-    [page, pageSize, period, searchQuery]
+    []
   );
 
   const openLeadFromNotification = useCallback(
@@ -177,7 +179,6 @@ export default function LeadsPage() {
       router.push(url);
       if (page !== 1 && user?.unidade) {
         setPage(1);
-        setLoading(true);
         fetchLeads(user.unidade, 1, pageSize, period, searchQuery);
       }
     },
@@ -223,10 +224,8 @@ export default function LeadsPage() {
       if (!user?.unidade) return;
       setPeriod(nextPeriod);
       setPage(1);
-      setLoading(true);
-      fetchLeads(user.unidade, 1, pageSize, nextPeriod, searchQuery);
     },
-    [fetchLeads, pageSize, searchQuery, user]
+    [user]
   );
 
   const createAtendente = useCallback(async () => {
@@ -330,6 +329,51 @@ export default function LeadsPage() {
     }
   }, [fetchLeads, fetchTodayCount, pageSize, period, searchQuery, user]);
 
+  const handleExportLeads = useCallback(async () => {
+    if (!user?.unidade) {
+      toast.error('Conta sem unidade configurada.');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({
+        unidade: user.unidade,
+        start: toPeriodStartIso(period.startDate),
+        end: toPeriodEndIso(period.endDate),
+      });
+      if (searchQuery.trim()) {
+        params.set('search', searchQuery.trim());
+      }
+
+      const response = await fetch(`/api/leads/export?${params.toString()}`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        toast.error(data?.error || 'Não foi possível gerar o arquivo.');
+        return;
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get('content-disposition') || '';
+      const filenameMatch = disposition.match(/filename="([^"]+)"/i);
+      const filename = filenameMatch?.[1] || `leads-${user.unidade}.csv`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Arquivo de leads gerado.');
+    } catch (error) {
+      console.error('[leads] Erro ao exportar:', error);
+      toast.error('Erro ao baixar os leads.');
+    } finally {
+      setExporting(false);
+    }
+  }, [period, searchQuery, user]);
+
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (!userData) {
@@ -339,7 +383,7 @@ export default function LeadsPage() {
 
     const parsedUser = JSON.parse(userData) as User;
     setUser(parsedUser);
-    fetchLeads(parsedUser.unidade);
+    if (!parsedUser.unidade) setLoading(false);
     fetchAtendentes(parsedUser.unidade);
     fetchTodayCount(parsedUser.unidade);
 
@@ -347,7 +391,7 @@ export default function LeadsPage() {
       const leadFromUrl = new URLSearchParams(window.location.search).get('lead');
       setHighlightLeadId(leadFromUrl);
     }
-  }, [router, fetchLeads, fetchAtendentes, fetchTodayCount]);
+  }, [router, fetchAtendentes, fetchTodayCount]);
 
   const pendingLabel = useMemo(() => {
     if (!pending) return '';
@@ -451,20 +495,19 @@ export default function LeadsPage() {
 
     const timeout = window.setTimeout(() => {
       setPage(1);
-      setLoading(true);
       fetchLeads(user.unidade, 1, pageSize, period, searchQuery);
     }, 350);
 
     return () => window.clearTimeout(timeout);
-  }, [fetchLeads, pageSize, period, searchQuery, user]);
+  }, [fetchLeads, pageSize, period, searchQuery, user?.unidade]);
 
   const goToPage = useCallback(
-    (nextPage: number) => {
+    async (nextPage: number) => {
       if (!user?.unidade || !pagination) return;
       const bounded = Math.min(Math.max(nextPage, 1), pagination.totalPages);
       setPage(bounded);
-      setLoading(true);
-      fetchLeads(user.unidade, bounded, pageSize, period, searchQuery);
+      await fetchLeads(user.unidade, bounded, pageSize, period, searchQuery);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     },
     [fetchLeads, pageSize, pagination, period, searchQuery, user]
   );
@@ -474,10 +517,8 @@ export default function LeadsPage() {
       if (!user?.unidade) return;
       setPageSize(value);
       setPage(1);
-      setLoading(true);
-      fetchLeads(user.unidade, 1, value, period, searchQuery);
     },
-    [fetchLeads, period, searchQuery, user]
+    [user]
   );
 
   const getStatusColor = (status: string) => {
@@ -683,8 +724,8 @@ export default function LeadsPage() {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => goToPage(page - 1)}
-            disabled={page <= 1}
+            onClick={() => goToPage(pagination.page - 1)}
+            disabled={pagination.page <= 1}
           >
             <ChevronLeft className="size-4" />
             Anterior
@@ -693,8 +734,8 @@ export default function LeadsPage() {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => goToPage(page + 1)}
-            disabled={page >= pagination.totalPages}
+            onClick={() => goToPage(pagination.page + 1)}
+            disabled={pagination.page >= pagination.totalPages}
           >
             Próxima
             <ChevronRight className="size-4" />
@@ -754,7 +795,7 @@ export default function LeadsPage() {
                 {todayCount} entraram hoje. Ordenado do mais recente para o mais antigo.
               </div>
             </div>
-            <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(18rem,24rem)_minmax(18rem,1fr)_auto_auto] xl:items-center">
+            <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(18rem,24rem)_minmax(18rem,1fr)_auto_auto_auto] xl:items-center">
               <DateRangePicker value={period} onChange={changePeriod} />
 
               <label className="relative block">
@@ -790,6 +831,17 @@ export default function LeadsPage() {
                   Funil
                 </button>
               </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleExportLeads}
+                disabled={exporting}
+                className="h-11 justify-center"
+              >
+                <Download className="size-4" />
+                {exporting ? 'Gerando...' : 'Baixar leads'}
+              </Button>
 
               <Button
                 type="button"
