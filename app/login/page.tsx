@@ -26,6 +26,7 @@ export default function LoginPage() {
 
       if (data.success) {
         localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('leadsflow:lastActivityAt', String(Date.now()));
         router.push('/dashboard');
       } else {
         setError(data.error || 'Erro ao fazer login');
