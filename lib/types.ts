@@ -22,7 +22,8 @@ export interface Lead {
   email?: string;
   telefone: string;
   curso?: string;
-  modalidade?: 'EAD' | 'Presencial' | 'Híbrido';
+  /** Medicina de Vilhena usa este campo para a forma de ingresso. */
+  modalidade?: 'EAD' | 'Presencial' | 'Híbrido' | 'Portador de Diploma' | 'Nota do Enem' | 'Vestibular Agendado';
   medico?: string | null;
   faculdade: Faculdade;
   /** Pode ser null em leads antigos (pré-unidade). */

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { supabaseAdmin } from '@/lib/supabase';
+import { getVilhenaMedicineFields } from '@/lib/vilhena-medicine-form.mjs';
 import type { Faculdade, LeadStatus, Unidade } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -297,6 +298,8 @@ function mapLeadToRow(lead: LeadgenLead, page: PageConfig): Record<string, unkno
     'médico',
   ]);
 
+  const medicine = getVilhenaMedicineFields(lead.form_id, fieldData);
+
   const dataSub =
     lead.created_time && !Number.isNaN(Date.parse(lead.created_time))
       ? new Date(lead.created_time).toISOString()
@@ -310,8 +313,8 @@ function mapLeadToRow(lead: LeadgenLead, page: PageConfig): Record<string, unkno
     nome,
     telefone,
     email: email ?? null,
-    curso: curso ?? null,
-    modalidade: normalizeModalidade(modalidadeRaw),
+    curso: medicine ? medicine.curso : curso ?? null,
+    modalidade: medicine ? medicine.modalidade : normalizeModalidade(modalidadeRaw),
     medico: medico ?? null,
     faculdade: faculdadeFromUnidade(page.unidade),
     unidade: page.unidade,

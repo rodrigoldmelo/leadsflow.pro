@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { supabaseAdmin } from '@/lib/supabase';
+import { getVilhenaMedicineFields, VILHENA_MEDICINE_FORM_ID } from '@/lib/vilhena-medicine-form.mjs';
 import type { LeadStatus } from '@/lib/types';
 import {
   faculdadeFromUnidade,
@@ -223,11 +224,13 @@ function mapLeadRow(
     normalized_ad_account_id: adAccountNormalized,
   });
 
-  const unidade = getUnidadeFromAccount(adAccountNormalized, {
-    leadgenId,
-    campaign_name: campaignName,
-    ad_name: adName,
-  });
+  const unidade = (g.form_id ?? webhookValue?.form_id) === VILHENA_MEDICINE_FORM_ID
+    ? 'uninassau_vilhena'
+    : getUnidadeFromAccount(adAccountNormalized, {
+        leadgenId,
+        campaign_name: campaignName,
+        ad_name: adName,
+      });
 
   console.log(logPrefix(), 'Unidade aplicada ao lead:', {
     unidade,
@@ -269,6 +272,8 @@ function mapLeadRow(
     'médico',
   ]);
 
+  const medicine = getVilhenaMedicineFields(g.form_id ?? webhookValue?.form_id, fd);
+
   const dataSub =
     g.created_time && !Number.isNaN(Date.parse(g.created_time))
       ? new Date(g.created_time).toISOString()
@@ -282,8 +287,8 @@ function mapLeadRow(
     nome,
     telefone,
     email: email ?? null,
-    curso: curso ?? null,
-    modalidade: normalizeModalidade(modalidadeRaw),
+    curso: medicine ? medicine.curso : curso ?? null,
+    modalidade: medicine ? medicine.modalidade : normalizeModalidade(modalidadeRaw),
     medico: medico ?? null,
     faculdade,
     unidade,
